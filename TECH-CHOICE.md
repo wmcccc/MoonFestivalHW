@@ -2,7 +2,7 @@
 
 ## 遊戲需求
 
-這是一款約 3–5 分鐘的文字密室：玩家點選線索、更新調查狀態、輸入三位數密碼。主要難題是把線索和遊戲狀態講清楚，不是大量即時動畫或複雜畫面。執行目標是 VS Code Live Server，並希望不必安裝或 build 就能遊玩。
+這是一款約 3–5 分鐘的文字密室：玩家在不同房間查看日常物件，從前一道鎖取得下一道鎖的線索，依序解開三道密碼。主要難題是把線索和跨頁進度講清楚，不是大量即時動畫或複雜畫面。執行目標是 VS Code Live Server，並希望不必安裝或 build 就能遊玩。
 
 ## 方案比較
 
@@ -14,7 +14,7 @@
 
 ## 決定
 
-選用 **原生 HTML + CSS + JavaScript ES modules**。JavaScript 不需編譯；遊戲狀態與鎖碼規則集中在 `game.mjs`，畫面互動在 `app.mjs`，頁面和樣式則分開維護。這個結構保留了可讀性，又不需要 npm、framework 或 build。
+選用 **原生 HTML + CSS + JavaScript ES modules**。JavaScript 不需編譯；遊戲狀態與三道鎖規則集中在 `game.mjs`，房間內容和互動在 `app.mjs`，各房間各自有 HTML 網址。進度放在 `sessionStorage`，只保留在目前瀏覽器分頁，不需要後端或 build。
 
 **VS Code Live Server 是靜態開發伺服器，不是框架，也不是程式語言。**它會把根目錄檔案送到瀏覽器，讓 ES modules 能透過 HTTP 載入。
 
