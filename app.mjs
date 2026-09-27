@@ -1,9 +1,14 @@
 import {
+    ITEMS,
+    LOCKS,
     PROGRESS_KEY,
     ROOM_IDS,
     ROOMS,
+    ROOM_OBJECTS,
     canEnterRoom,
     createGameState,
+    inspectObject,
+    restoreGameState,
     submitDoorCode,
 } from "./game.mjs";
 
@@ -15,73 +20,65 @@ const roomContent = {
         icon: "🥮",
         art: "月餅評審桌",
         arrivalClue: "",
-        objects: [
-            { icon: "🧾", name: "簽到表和月餅券", detail: "嫦娥 20:08 到，餅券 A06；玉兔 20:14 到，餅券 B02；吳剛 20:21 到，餅券 C08。" },
-            { icon: "🏷️", name: "門旁的密碼貼紙", detail: "貼紙寫著：「照簽到時間，由早到晚，把三張餅券最後一個數字排起來。」" },
-        ],
+        lockId: "office-door",
         lockLabel: "評審室的門鎖",
-        lockPrompt: "輸入三位數，打開茶水間的門。",
-        hint: "先排 20:08、20:14、20:21，再取 A06、B02、C08 最後一碼。",
-        wrong: "不對。門鎖嗶了兩聲，還順便嫌你數學不好。",
-        nextText: "門鎖開了！門後就是茶水間，裡面傳來微波爐叮的一聲。",
+        lockPrompt: "先看打卡簿和密碼便條，再按三位數密碼。",
+        hint: "按打卡時間排 A06、B02、C08，拿每張月餅券的最後一碼。",
+        wrong: "不對。門鎖嗶兩聲，還順便嫌你數學不好。",
+        success: "門鎖開了！門後傳來微波爐叮的一聲。",
     },
     pantry: {
         name: "員工茶水間",
         title: "冰箱裡有一盒沒人認領的五仁月餅",
-        intro: "你走進茶水間，微波爐裡有一杯忘了拿的珍奶，吸管還插在門縫。冰箱貼著一張剛解鎖的便條，字跡很像死者，內容卻像超商店員寫的。",
+        intro: "微波爐裡有一杯忘了拿的珍奶，吸管還插在門縫。冰箱旁的置物櫃掛著密碼鎖，後面傳出很像有人在打呼的聲音。",
         icon: "🧋",
         art: "共用冰箱・請勿偷喝",
-        arrivalClue: "抽屜裡的便條：「下一道鎖看超商收據。照時間順序，抄每筆金額最後一個數字。」這裡連冰箱都要密碼，廣寒宮管理費真的沒白收。",
-        objects: [
-            { icon: "🧾", name: "皺掉的超商收據", detail: "20:10 無糖奶茶 $34；20:14 胡蘿蔔三明治 $12；20:18 五仁月餅 $27。收據底下還寫著「集點差一點」。" },
-            { icon: "🧲", name: "冰箱磁鐵", detail: "磁鐵上寫：「食物請寫名字。沒寫就當公用，但不准寫『公用』。」旁邊畫了一隻正在瞪人的兔子。" },
-        ],
-        lockLabel: "冰箱旁的置物櫃",
-        lockPrompt: "照收據時間，輸入三筆金額最後一個數字。",
-        hint: "20:10 是第一筆、20:14 第二筆、20:18 第三筆；各取金額個位數。",
+        arrivalClue: "你剛從評審室的抽屜裡找到小螺絲起子。冰箱後面有一塊不太平的通風板，說不定拆開會有東西。",
+        lockId: "pantry-toolbox",
+        lockLabel: "冰箱旁的工具櫃",
+        lockPrompt: "照收據時間，按三筆金額的個位數。櫃子裡放著怪工具。",
+        hint: "收據 20:10、20:14、20:18 的金額依序是 $34、$12、$27。",
         wrong: "鎖沒開。冰箱裡的珍奶看起來也對你很失望。",
-        nextText: "置物櫃開了！一張兔子群組截圖和走廊門卡掉了出來。",
+        success: "工具櫃開了，裡面有一支伸縮磁鐵棒。",
+    },
+    hidden: {
+        name: "冰箱後面的隱藏室",
+        title: "這裡真的有人把月餅藏進牆裡",
+        intro: "你爬過通風口，鑽進一間沒開燈的小房間。灰塵很多，月餅更多。牆上有張看不清楚的月曆，角落傳來金屬碰撞聲。",
+        icon: "🌙",
+        art: "廣寒宮・秘密儲藏室",
+        arrivalClue: "手電筒照亮後，你看到一排員工偷藏的零食，還有一張寫著「不是衣櫃」的門牌。這裡的標示方式很值得調查。",
+        lockId: "hidden-archive",
+        lockLabel: "月曆旁的工具箱",
+        lockPrompt: "先用手電筒照月曆，再看冰箱上撕下來的行事曆。",
+        hint: "農曆八月十五，密碼要把月份放前面，不用輸入斜線。",
+        wrong: "工具箱發出一聲不屑的喀。它比胡仁還難伺候。",
+        success: "工具箱打開了，裡面有一張月宮門卡。",
     },
     hallway: {
         name: "逃生走廊",
         title: "出口就在前面，保全卻去買雞排了",
-        intro: "走廊沒人，門上貼著「故障請勿重開」；旁邊還有一台投幣式月餅販賣機。置物櫃裡那張群組截圖，現在看起來很像有人自己把犯案原因傳給全公司。",
+        intro: "走廊沒人，出口的密碼鎖蓋著塑膠板。牆上貼著一張天文台公告，還有兔子群組的列印截圖，最後一則訊息看起來有點可疑。",
         icon: "🚪",
         art: "出口・請刷卡再輸入密碼",
-        arrivalClue: "群組截圖：「胡仁再說五仁月餅不算月餅，我就把那個冷笑話講到底。」發訊息的是玉兔。旁邊的便條補一句：出口密碼是今晚月亮升起的時間，冒號不用打。",
-        objects: [
-            { icon: "🌕", name: "天文台公告", detail: "今晚月出時間：20:10。公告最下面還提醒：「請勿對月亮按讚，它不會回覆。」" },
-            { icon: "📱", name: "兔子群組截圖", detail: "玉兔：「胡仁再說五仁月餅不算月餅，我就把那個冷笑話講到底。」胡仁回了一個倒讚，隔壁同事回「不要在上班時間吵」。" },
-        ],
+        arrivalClue: "你用黃銅小鑰匙打開了走廊門。門後有個刷卡槽，旁邊貼著「進入前請確認自己已經下班」。",
+        lockId: "hall-exit",
         lockLabel: "大樓出口",
-        lockPrompt: "把月出時間輸入成四位數，不用打冒號。",
-        hint: "公告上寫 20:10，把冒號拿掉就好。",
-        wrong: "還是出不去。走廊的感應燈都替你尷尬地暗了一格。",
-        nextText: "",
+        lockPrompt: "用月宮門卡打開密碼鎖蓋子，再輸入月出時間。",
+        hint: "天文台公告寫著 20:10。拿掉冒號就好。",
+        wrong: "還是出不去。感應燈替你尷尬地暗了一格。",
+        success: "出口開了。外面的空氣聞起來像自由和雞排。",
     },
 };
 
 const roomId = document.body.dataset.room;
 const room = roomContent[roomId];
 const root = document.querySelector("#room-root");
-
-function readGameState() {
-    try {
-        const saved = JSON.parse(sessionStorage.getItem(PROGRESS_KEY));
-        if (saved && Array.isArray(saved.unlockedRooms) && Array.isArray(saved.completedRooms)) {
-            return {
-                unlockedRooms: ROOM_IDS.filter((id) => saved.unlockedRooms.includes(id)),
-                completedRooms: ROOM_IDS.filter((id) => saved.completedRooms.includes(id)),
-                escaped: Boolean(saved.escaped),
-            };
-        }
-    } catch {
-        sessionStorage.removeItem(PROGRESS_KEY);
-    }
-    return createGameState();
-}
-
+const lock = room ? LOCKS[room.lockId] : null;
 let gameState = readGameState();
+let selectedItem = null;
+let keypadValue = "";
+let wrongAttempts = 0;
 
 if (!room || !canEnterRoom(gameState, roomId)) {
     window.location.replace("index.html");
@@ -90,21 +87,33 @@ if (!room || !canEnterRoom(gameState, roomId)) {
     renderRoom();
 }
 
+function readGameState() {
+    try {
+        return restoreGameState(JSON.parse(sessionStorage.getItem(PROGRESS_KEY)));
+    } catch {
+        sessionStorage.removeItem(PROGRESS_KEY);
+        return createGameState();
+    }
+}
+
+function saveGameState() {
+    sessionStorage.setItem(PROGRESS_KEY, JSON.stringify(gameState));
+}
+
 function renderRoom() {
     const roomNumber = ROOM_IDS.indexOf(roomId) + 1;
-    const locationLinks = ROOM_IDS.map((id, index) => {
+    const roomLinks = ROOM_IDS.map((id, index) => {
         const label = `${String(index + 1).padStart(2, "0")} ${roomContent[id].name}`;
-        const current = id === roomId ? " is-current" : "";
         if (!canEnterRoom(gameState, id)) {
             return `<span class="room-step is-locked" aria-disabled="true">${label}・未開</span>`;
         }
+        const current = id === roomId ? " is-current" : "";
         return `<a class="room-step${current}" href="${ROOMS[id].path}"${id === roomId ? ' aria-current="page"' : ""}>${label}</a>`;
     }).join("");
-
-    const objects = room.objects.map((item, index) => `
-        <button class="object-button" type="button" data-object="${index}" aria-pressed="false">
-            <span class="object-icon" aria-hidden="true">${item.icon}</span>
-            <span class="object-name">${item.name}</span>
+    const objectButtons = ROOM_OBJECTS[roomId].map((object) => `
+        <button class="object-button" type="button" data-object="${object.id}" aria-pressed="false">
+            <span class="object-icon" aria-hidden="true">${object.icon}</span>
+            <span class="object-name">${object.name}</span>
             <span class="object-action">查看 →</span>
         </button>
     `).join("");
@@ -112,55 +121,63 @@ function renderRoom() {
     root.innerHTML = `
         <section class="room-hero" aria-labelledby="room-title">
             <div class="room-hero-copy">
-                <p class="eyebrow">廣寒宮命案・房間 ${roomNumber} / 3</p>
+                <p class="eyebrow">廣寒宮命案・房間 ${roomNumber} / ${ROOM_IDS.length}</p>
                 <h1 id="room-title">${room.title}</h1>
                 <p class="room-intro">${room.intro}</p>
-                <nav class="room-map" aria-label="已開放房間">${locationLinks}</nav>
+                <nav class="room-map" aria-label="已開放房間">${roomLinks}</nav>
             </div>
             <div class="room-art" data-room-art="${roomId}" aria-label="${room.art}">
                 <span class="art-serial">現場紀錄 0${roomNumber}</span>
                 <span class="art-icon" aria-hidden="true">${room.icon}</span>
                 <span class="art-label">${room.art}</span>
-                <span class="art-mark" aria-hidden="true">中秋特別調查</span>
+                <span class="art-mark" aria-hidden="true">月光調查中</span>
             </div>
         </section>
 
         <div class="room-layout">
             <section class="room-main" aria-label="房間調查與密碼鎖">
-                ${room.arrivalClue ? `<aside class="arrival-clue"><span>剛解鎖的線索</span><p>${room.arrivalClue}</p></aside>` : ""}
+                ${room.arrivalClue ? `<aside class="arrival-clue"><span>剛從上一間帶來的線索</span><p>${room.arrivalClue}</p></aside>` : ""}
+                <section class="inventory-panel" aria-labelledby="inventory-title">
+                    <div class="subheading"><p class="section-index">隨身工具</p><h2 id="inventory-title">工具袋</h2></div>
+                    <p class="inventory-instruction" id="inventory-instruction">撿到工具後，點工具袋裡的工具，再點想使用的物件。</p>
+                    <div class="inventory-list" id="inventory-list" aria-label="已取得的工具"></div>
+                </section>
                 <section class="object-section" aria-labelledby="object-heading">
-                    <div class="subheading"><p class="section-index">看看周圍</p><h2 id="object-heading">房間裡有這些東西</h2></div>
-                    <div class="object-list">${objects}</div>
+                    <div class="subheading"><p class="section-index">仔細找找</p><h2 id="object-heading">房間裡散落著東西</h2></div>
+                    <div class="object-list">${objectButtons}</div>
                     <div class="object-detail" id="object-detail" aria-live="polite" aria-atomic="true">
                         <span class="detail-label">調查筆記</span>
-                        <p>點一件物品看看。沒有一件看起來像正經線索，這倒是很可疑。</p>
+                        <p>先四處看看。地上那個月餅叉應該不是裝飾。</p>
                     </div>
                 </section>
 
-                <form class="lock-panel" id="door-form" novalidate>
+                <section class="lock-panel" id="lock-panel" aria-labelledby="lock-title">
                     <div class="lock-heading">
-                        <p class="section-index">下一道門・${roomNumber === 3 ? "最後一道鎖" : `第 ${roomNumber} 道鎖`}</p>
-                        <h2>${room.lockLabel}</h2>
+                        <p class="section-index">${roomNumber === ROOM_IDS.length ? "最後一道鎖" : "房間密碼鎖"}</p>
+                        <h2 id="lock-title">${room.lockLabel}</h2>
                         <p>${room.lockPrompt}</p>
                     </div>
-                    <div class="lock-entry">
-                        <label class="visually-hidden" for="door-code">輸入密碼</label>
-                        <input id="door-code" name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="${ROOMS[roomId].code.length}" placeholder="${"●".repeat(ROOMS[roomId].code.length)}" aria-describedby="door-feedback">
-                        <button class="unlock-button" type="submit">${roomNumber === 3 ? "打開出口" : "開鎖進下一間"}<span aria-hidden="true">→</span></button>
+                    <div class="keypad-display" id="keypad-display" aria-label="目前輸入的密碼" aria-live="polite"><span class="display-placeholder">${"● ".repeat(lock.code.length)}</span></div>
+                    <div class="keypad-grid" id="keypad-grid" aria-label="密碼按鈕">
+                        ${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => `<button type="button" class="digit-button" data-digit="${digit}" aria-label="數字 ${digit}">${digit}</button>`).join("")}
+                        <button type="button" class="digit-button function-button" data-action="clear" aria-label="清除密碼">清除</button>
+                        <button type="button" class="digit-button" data-digit="0" aria-label="數字 0">0</button>
+                        <button type="button" class="digit-button function-button" data-action="delete" aria-label="刪除一位">⌫</button>
+                        <button type="button" class="digit-button enter-digit" data-action="submit" aria-label="確認密碼">開鎖</button>
                     </div>
-                    <p class="door-feedback" id="door-feedback" role="status" aria-live="polite">門鎖旁貼著一張字條：「密碼不要寫在門上。」</p>
+                    <p class="door-feedback" id="door-feedback" role="status" aria-live="polite">先找線索；密碼鎖不吃珍奶發票。</p>
                     <button class="hint-button" id="hint-button" type="button" hidden>我卡住了，給個提示</button>
                     <p class="hint-text" id="hint-text" hidden>${room.hint}</p>
-                </form>
+                </section>
 
                 <section class="door-open" id="door-open" hidden>
-                    <p class="section-index">門開了</p>
+                    <p class="section-index">通道打開了</p>
                     <p id="door-open-text"></p>
-                    <a class="continue-button" id="continue-link" href="#">推門進去 <span aria-hidden="true">→</span></a>
+                    <a class="continue-button" id="continue-link" href="#">進去看看 <span aria-hidden="true">→</span></a>
                 </section>
 
                 <section class="ending-panel" id="ending-panel" tabindex="-1" hidden>
-                    <p class="section-index">案子結了，你也出來了</p>
+                    <p class="section-index">終於下班了</p>
                     <h2>真兇：玉兔。動機：五仁月餅被打零分。</h2>
                     <p>玉兔受不了胡仁每年都嫌五仁月餅，於是把自己寫的冷笑話念給他聽。法醫說死者笑到喘不過氣；玉兔的辯解是：「我以為他只是笑得比較大聲。」這個案子結了，冷笑話還是沒有下架。</p>
                     <p class="ending-last-line">你終於走出去了。保全回來時，手上還拿著雞排和一杯珍奶。</p>
@@ -170,113 +187,200 @@ function renderRoom() {
 
             <aside class="room-sidebar" aria-label="案件進度">
                 <p class="section-index">今天的加班紀錄</p>
-                <h2>${roomNumber} / 3<br><span>${room.name}</span></h2>
-                <p class="sidebar-copy">你每打開一道鎖，就會進到新的房間，拿到下一條線索。別急著回家，走廊的門還沒開。</p>
+                <h2>${roomNumber} / ${ROOM_IDS.length}<br><span>${room.name}</span></h2>
+                <p class="sidebar-copy">四個房間、四道密碼鎖。工具要自己撿、自己用，線索不會主動跑來幫你加班。</p>
                 <div class="sidebar-note"><span aria-hidden="true">兔</span><p>胡仁的月餅評語：<br>「五仁？這是把冰箱清空了吧。」</p></div>
-                <p class="playtime">預計 3–5 分鐘 ・ 不限時</p>
+                <p class="playtime">預計約 10 分鐘 ・ 不限時</p>
             </aside>
         </div>
     `;
 
-    bindRoomControls();
-    restoreCompletedRoom();
-}
-
-function bindRoomControls() {
-    const detail = document.querySelector("#object-detail");
-    document.querySelectorAll(".object-button").forEach((button) => {
-        button.addEventListener("click", () => {
-            const item = room.objects[Number(button.dataset.object)];
-            document.querySelectorAll(".object-button").forEach((other) => other.setAttribute("aria-pressed", "false"));
-            button.setAttribute("aria-pressed", "true");
-            detail.innerHTML = `<span class="detail-label">${item.name}</span><p>${item.detail}</p>`;
-        });
-    });
-
-    let wrongAttempts = 0;
-    const form = document.querySelector("#door-form");
-    const input = document.querySelector("#door-code");
-    const feedback = document.querySelector("#door-feedback");
-    const hintButton = document.querySelector("#hint-button");
-    const hintText = document.querySelector("#hint-text");
-
-    form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const result = submitDoorCode(gameState, roomId, input.value);
-        if (result.status === "invalid") {
-            feedback.textContent = `這道鎖要 ${ROOMS[roomId].code.length} 位數字，不能偷加井字號。`;
-            feedback.classList.add("is-error");
-            input.select();
-            return;
-        }
-        if (result.status === "wrong") {
-            wrongAttempts += 1;
-            feedback.textContent = room.wrong;
-            feedback.classList.add("is-error");
-            hintButton.hidden = wrongAttempts < 2;
-            input.select();
-            return;
-        }
-        if (result.status === "locked" || result.status === "unknown-room") {
-            window.location.replace("index.html");
-            return;
-        }
-
-        gameState = result.state;
-        sessionStorage.setItem(PROGRESS_KEY, JSON.stringify(gameState));
-        input.disabled = true;
-        form.querySelector(".unlock-button").disabled = true;
-        feedback.classList.remove("is-error");
-
-        if (result.status === "escaped") {
-            feedback.textContent = "門開了。外面的空氣聞起來像自由和雞排。";
-            document.querySelector("#ending-panel").hidden = false;
-            document.querySelector("#ending-panel").focus();
-            return;
-        }
-
-        feedback.textContent = room.nextText;
-        const nextRoom = roomContent[result.nextRoom];
-        const doorOpen = document.querySelector("#door-open");
-        document.querySelector("#door-open-text").textContent = room.nextText;
-        const continueLink = document.querySelector("#continue-link");
-        continueLink.href = ROOMS[result.nextRoom].path;
-        continueLink.textContent = `進入${nextRoom.name} →`;
-        doorOpen.hidden = false;
-        continueLink.focus();
-    });
-
-    hintButton.addEventListener("click", () => {
-        hintText.hidden = !hintText.hidden;
-        hintButton.textContent = hintText.hidden ? "我卡住了，給個提示" : "收起提示";
-    });
-
+    renderInventory();
+    bindObjects();
+    bindKeypad();
     document.querySelector("#restart-button").addEventListener("click", restartGame);
     document.querySelector("#restart-inline")?.addEventListener("click", restartGame);
+    restoreRoomProgress();
 }
 
-function restoreCompletedRoom() {
-    if (!gameState.completedRooms.includes(roomId)) {
+function renderInventory() {
+    const inventory = document.querySelector("#inventory-list");
+    const items = gameState.items;
+    if (items.length === 0) {
+        inventory.innerHTML = '<span class="inventory-empty">還沒撿到工具</span>';
         return;
     }
 
-    const form = document.querySelector("#door-form");
-    const feedback = document.querySelector("#door-feedback");
-    form.hidden = true;
+    inventory.innerHTML = items.map((itemId) => `
+        <button class="inventory-item${selectedItem === itemId ? " is-selected" : ""}" type="button" data-item="${itemId}" aria-pressed="${selectedItem === itemId}">
+            <span aria-hidden="true">${ITEMS[itemId].icon}</span>${ITEMS[itemId].name}
+        </button>
+    `).join("");
+    inventory.querySelectorAll(".inventory-item").forEach((button) => {
+        button.addEventListener("click", () => {
+            selectedItem = selectedItem === button.dataset.item ? null : button.dataset.item;
+            document.querySelector("#inventory-instruction").textContent = selectedItem
+                ? `已選「${ITEMS[selectedItem].name}」，再點要使用它的物件。`
+                : "撿到工具後，點工具袋裡的工具，再點想使用的物件。";
+            renderInventory();
+        });
+    });
+}
 
-    if (roomId === "hallway" && gameState.escaped) {
+function bindObjects() {
+    document.querySelectorAll(".object-button").forEach((button) => {
+        button.addEventListener("click", () => {
+            const result = inspectObject(gameState, roomId, button.dataset.object, selectedItem);
+            const object = ROOM_OBJECTS[roomId].find((entry) => entry.id === button.dataset.object);
+            if (result.status === "need-item") {
+                showObjectDetail(object.name, `還沒有${ITEMS[result.itemId].name}。先找找房間裡有沒有能拿走的工具。`);
+                return;
+            }
+            if (result.status === "select-item") {
+                showObjectDetail(object.name, `你有${ITEMS[result.itemId].name}。先在工具袋點它，再回來使用。`);
+                return;
+            }
+
+            gameState = result.state;
+            saveGameState();
+            if (result.object?.requiresItem) {
+                selectedItem = null;
+                document.querySelector("#inventory-instruction").textContent = "工具用上了。繼續查看其他東西或解密碼鎖。";
+            }
+            renderInventory();
+            button.setAttribute("aria-pressed", "true");
+
+            let detail = result.object?.detail ?? "這東西看起來還是很可疑。";
+            if (result.status === "item-found") {
+                detail += ` 拿到工具：${ITEMS[result.object.givesItem].name}。`;
+            }
+            showObjectDetail(object.name, detail);
+
+            if (result.status === "room-opened") {
+                revealNextRoom(result.object.unlockRoom, `你用${ITEMS[result.object.requiresItem].name}打開了通道。`);
+            }
+        });
+    });
+}
+
+function showObjectDetail(title, text) {
+    const panel = document.querySelector("#object-detail");
+    panel.replaceChildren();
+    const label = document.createElement("span");
+    const detail = document.createElement("p");
+    label.className = "detail-label";
+    label.textContent = title;
+    detail.textContent = text;
+    panel.append(label, detail);
+}
+
+function bindKeypad() {
+    const grid = document.querySelector("#keypad-grid");
+    grid.querySelectorAll("[data-digit]").forEach((button) => {
+        button.addEventListener("click", () => {
+            if (keypadValue.length >= lock.code.length) {
+                return;
+            }
+            keypadValue += button.dataset.digit;
+            renderKeypadDisplay();
+        });
+    });
+    grid.querySelector('[data-action="clear"]').addEventListener("click", () => {
+        keypadValue = "";
+        renderKeypadDisplay();
+    });
+    grid.querySelector('[data-action="delete"]').addEventListener("click", () => {
+        keypadValue = keypadValue.slice(0, -1);
+        renderKeypadDisplay();
+    });
+    grid.querySelector('[data-action="submit"]').addEventListener("click", submitCode);
+    document.querySelector("#hint-button").addEventListener("click", toggleHint);
+}
+
+function renderKeypadDisplay() {
+    const display = document.querySelector("#keypad-display");
+    display.textContent = keypadValue.padEnd(lock.code.length, "○").split("").join(" ");
+}
+
+function submitCode() {
+    const feedback = document.querySelector("#door-feedback");
+    if (keypadValue.length !== lock.code.length) {
+        feedback.textContent = `還沒按滿 ${lock.code.length} 個數字。慢慢來，門不會跑掉。`;
+        feedback.classList.add("is-error");
+        return;
+    }
+
+    const result = submitDoorCode(gameState, room.lockId, keypadValue);
+    if (result.status === "need-clues") {
+        feedback.textContent = "鎖不動。先把房間裡能看的線索都看一遍。";
+    } else if (result.status === "need-item") {
+        feedback.textContent = `還缺${ITEMS[LOCKS[room.lockId].requiredItems.find((itemId) => !gameState.items.includes(itemId))].name}。`;
+    } else if (result.status === "locked") {
+        feedback.textContent = "鎖的面板還沒打開。先找找有沒有能用的卡或鑰匙。";
+    } else if (result.status === "wrong" || result.status === "invalid") {
+        wrongAttempts += 1;
+        feedback.textContent = room.wrong;
+        document.querySelector("#hint-button").hidden = wrongAttempts < 2;
+    } else if (result.status === "already-open") {
+        feedback.textContent = "這道鎖已經開過了。";
+    } else {
+        gameState = result.state;
+        saveGameState();
+        if (result.status === "escaped") {
+            feedback.textContent = room.success;
+            document.querySelector("#keypad-grid").hidden = true;
+            document.querySelector("#ending-panel").hidden = false;
+            document.querySelector("#ending-panel").focus();
+        } else {
+            renderInventory();
+            feedback.textContent = result.rewardItem
+                ? `${room.success}拿到${ITEMS[result.rewardItem].name}。`
+                : room.success;
+            document.querySelector("#keypad-grid").hidden = true;
+            if (result.nextRoom) {
+                revealNextRoom(result.nextRoom, room.success);
+            }
+        }
+    }
+
+    feedback.classList.toggle("is-error", ["need-clues", "need-item", "locked", "wrong", "invalid", "already-open"].includes(result.status));
+    if (result.status !== "wrong" && result.status !== "invalid") {
+        keypadValue = "";
+        renderKeypadDisplay();
+    }
+}
+
+function revealNextRoom(nextRoomId, message) {
+    const doorOpen = document.querySelector("#door-open");
+    const continueLink = document.querySelector("#continue-link");
+    document.querySelector("#door-open-text").textContent = message;
+    continueLink.href = ROOMS[nextRoomId].path;
+    continueLink.textContent = `進入${roomContent[nextRoomId].name} →`;
+    doorOpen.hidden = false;
+    continueLink.focus();
+}
+
+function restoreRoomProgress() {
+    if (gameState.escaped && roomId === "hallway") {
+        document.querySelector("#keypad-grid").hidden = true;
+        document.querySelector("#door-feedback").textContent = room.success;
         document.querySelector("#ending-panel").hidden = false;
         return;
     }
-
-    if (ROOMS[roomId].next) {
-        document.querySelector("#door-open").hidden = false;
-        document.querySelector("#door-open-text").textContent = room.nextText;
-        const continueLink = document.querySelector("#continue-link");
-        continueLink.href = ROOMS[ROOMS[roomId].next].path;
-        continueLink.textContent = `回到${roomContent[ROOMS[roomId].next].name} →`;
+    if (gameState.openedLocks.includes(room.lockId)) {
+        document.querySelector("#keypad-grid").hidden = true;
+        document.querySelector("#door-feedback").textContent = room.success;
+        if (ROOMS[roomId].next && canEnterRoom(gameState, ROOMS[roomId].next)) {
+            revealNextRoom(ROOMS[roomId].next, room.success);
+        }
     }
-    feedback.textContent = "這道門你已經打開過了。要繼續就推門進去。";
+}
+
+function toggleHint() {
+    const hintText = document.querySelector("#hint-text");
+    const hintButton = document.querySelector("#hint-button");
+    hintText.hidden = !hintText.hidden;
+    hintButton.textContent = hintText.hidden ? "我卡住了，給個提示" : "收起提示";
 }
 
 function restartGame() {

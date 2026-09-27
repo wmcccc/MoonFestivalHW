@@ -3,68 +3,140 @@ import test from "node:test";
 import {
     canEnterRoom,
     createGameState,
+    inspectObject,
     submitDoorCode,
 } from "./game.mjs";
 
-test("only the office is accessible at the start", () => {
+function inspect(state, roomId, objectId, selectedItem = null) {
+    const result = inspectObject(state, roomId, objectId, selectedItem);
+    assert.ok(["inspected", "item-found", "room-opened"].includes(result.status));
+    return result.state;
+}
+
+function unlockOffice(state = createGameState()) {
+    state = inspect(state, "office", "office-signin");
+    state = inspect(state, "office", "office-tickets");
+    state = inspect(state, "office", "office-rule");
+    return submitDoorCode(state, "office-door", "628").state;
+}
+
+function unlockPantryTools(state = unlockOffice()) {
+    state = inspect(state, "pantry", "pantry-receipt");
+    state = inspect(state, "pantry", "pantry-note");
+    return submitDoorCode(state, "pantry-toolbox", "427").state;
+}
+
+function unlockHiddenRoom(state = unlockPantryTools()) {
+    state = inspect(state, "office", "office-fork");
+    state = inspect(state, "office", "office-drawer", "cakeFork");
+    state = inspect(state, "pantry", "pantry-flashlight");
+    return inspect(state, "pantry", "pantry-vent", "screwdriver").state;
+}
+
+test("a new game starts in the office and blocks later rooms", () => {
     const state = createGameState();
     assert.equal(canEnterRoom(state, "office"), true);
     assert.equal(canEnterRoom(state, "pantry"), false);
+    assert.equal(canEnterRoom(state, "hidden"), false);
 });
 
-test("a room requires a correctly sized numeric code", () => {
-    const state = createGameState();
-    assert.equal(submitDoorCode(state, "office", "62x").status, "invalid");
-    assert.equal(submitDoorCode(state, "office", "111").status, "wrong");
-});
-
-test("opening the office unlocks the pantry, but not the hallway", () => {
-    const result = submitDoorCode(createGameState(), "office", "628");
+test("the office door needs all three cross-referenced clues", () => {
+    let state = createGameState();
+    assert.equal(submitDoorCode(state, "office-door", "628").status, "need-clues");
+    state = inspect(state, "office", "office-signin");
+    state = inspect(state, "office", "office-tickets");
+    state = inspect(state, "office", "office-rule");
+    assert.ok(state.discoveredObjects.includes("office-tickets"));
+    const result = submitDoorCode(state, "office-door", "628");
     assert.equal(result.status, "opened");
-    assert.equal(result.nextRoom, "pantry");
     assert.equal(canEnterRoom(result.state, "pantry"), true);
-    assert.equal(canEnterRoom(result.state, "hallway"), false);
 });
 
-test("each later lock reveals access to exactly the next room", () => {
-    const pantry = submitDoorCode(createGameState(), "office", "628");
-    const hallway = submitDoorCode(pantry.state, "pantry", "427");
-    assert.equal(hallway.status, "opened");
-    assert.equal(hallway.nextRoom, "hallway");
-    assert.equal(canEnterRoom(hallway.state, "hallway"), true);
+test("the keypad rejects malformed and incorrect codes", () => {
+    let state = unlockOffice(createGameState());
+    state = inspect(state, "pantry", "pantry-receipt");
+    state = inspect(state, "pantry", "pantry-note");
+    assert.equal(submitDoorCode(state, "pantry-toolbox", "42x").status, "invalid");
+    assert.equal(submitDoorCode(state, "pantry-toolbox", "111").status, "wrong");
 });
 
-test("the final code completes the escape", () => {
-    const office = submitDoorCode(createGameState(), "office", "628");
-    const pantry = submitDoorCode(office.state, "pantry", "427");
-    const escape = submitDoorCode(pantry.state, "hallway", "2010");
-    assert.equal(escape.status, "escaped");
-    assert.equal(escape.state.escaped, true);
-});
-import assert from "node:assert/strict";
-import test from "node:test";
-import { checkEscapeCode, CLUE_IDS } from "./game.mjs";
-
-test("the exit stays locked until every clue has been inspected", () => {
-    assert.deepEqual(checkEscapeCode("628", CLUE_IDS.slice(0, -1)), {
-        status: "need-clues",
-    });
+test("the cake fork is required to get the screwdriver from the drawer", () => {
+    let state = unlockOffice(createGameState());
+    assert.equal(inspectObject(state, "office", "office-drawer").status, "need-item");
+    state = inspect(state, "office", "office-fork");
+    assert.equal(inspectObject(state, "office", "office-drawer").status, "select-item");
+    const result = inspectObject(state, "office", "office-drawer", "cakeFork");
+    assert.equal(result.status, "item-found");
+    assert.ok(result.state.items.includes("screwdriver"));
 });
 
-test("the keypad accepts only a three-digit code", () => {
-    assert.deepEqual(checkEscapeCode("62x", CLUE_IDS), {
-        status: "invalid",
-    });
+test("the pantry code requires both the receipt and its instruction note", () => {
+    let state = unlockOffice(createGameState());
+    state = inspect(state, "pantry", "pantry-receipt");
+    assert.equal(submitDoorCode(state, "pantry-toolbox", "427").status, "need-clues");
+    state = inspect(state, "pantry", "pantry-note");
+    const result = submitDoorCode(state, "pantry-toolbox", "427");
+    assert.equal(result.status, "opened");
+    assert.ok(result.state.items.includes("magnet"));
 });
 
-test("the correct evidence-derived code opens the exit", () => {
-    assert.deepEqual(checkEscapeCode(" 628 ", CLUE_IDS), {
-        status: "escaped",
-    });
+test("the screwdriver opens the hidden room, while the flashlight is picked up", () => {
+    let state = unlockPantryTools(unlockOffice(createGameState()));
+    state = inspect(state, "office", "office-fork");
+    state = inspect(state, "office", "office-drawer", "cakeFork");
+    state = inspect(state, "pantry", "pantry-flashlight");
+    assert.ok(state.items.includes("flashlight"));
+    assert.equal(canEnterRoom(state, "hidden"), false);
+    const result = inspectObject(state, "pantry", "pantry-vent", "screwdriver");
+    assert.equal(result.status, "room-opened");
+    assert.equal(canEnterRoom(result.state, "hidden"), true);
 });
 
-test("a valid but incorrect code does not open the exit", () => {
-    assert.deepEqual(checkEscapeCode("111", CLUE_IDS), {
-        status: "wrong",
-    });
+test("the hidden calendar can only be read with the selected flashlight", () => {
+    let state = unlockPantryTools(unlockOffice(createGameState()));
+    state = inspect(state, "office", "office-fork");
+    state = inspect(state, "office", "office-drawer", "cakeFork");
+    state = inspect(state, "pantry", "pantry-vent", "screwdriver");
+    assert.equal(inspectObject(state, "hidden", "hidden-calendar").status, "need-item");
+    const withLight = inspect(state, "pantry", "pantry-flashlight");
+    assert.equal(inspectObject(withLight, "hidden", "hidden-calendar").status, "select-item");
+    assert.equal(inspectObject(withLight, "hidden", "hidden-calendar", "flashlight").status, "inspected");
+});
+
+test("the archive lock requires month, moon-phase, and format clues", () => {
+    let state = unlockHiddenRoom();
+    state = inspect(state, "hidden", "hidden-calendar", "flashlight");
+    state = inspect(state, "hidden", "hidden-phase-chart");
+    assert.equal(submitDoorCode(state, "hidden-archive", "0815").status, "need-clues");
+    state = inspect(state, "hidden", "hidden-calendar-note");
+    const result = submitDoorCode(state, "hidden-archive", "0815");
+    assert.equal(result.status, "opened");
+    assert.ok(result.state.items.includes("keycard"));
+});
+
+test("the magnet retrieves a brass key that opens the hallway", () => {
+    let state = unlockHiddenRoom();
+    const result = inspectObject(state, "hidden", "hidden-grate", "magnet");
+    assert.equal(result.status, "item-found");
+    assert.ok(result.state.items.includes("brassKey"));
+    const opened = inspectObject(result.state, "hidden", "hidden-door", "brassKey");
+    assert.equal(opened.status, "room-opened");
+    assert.equal(canEnterRoom(opened.state, "hallway"), true);
+});
+
+test("the exit needs the moonrise clues and a keycard before the final code", () => {
+    let state = unlockHiddenRoom();
+    state = inspect(state, "hidden", "hidden-calendar", "flashlight");
+    state = inspect(state, "hidden", "hidden-phase-chart");
+    state = inspect(state, "hidden", "hidden-calendar-note");
+    state = submitDoorCode(state, "hidden-archive", "0815").state;
+    state = inspect(state, "hidden", "hidden-grate", "magnet");
+    state = inspect(state, "hidden", "hidden-door", "brassKey");
+    state = inspect(state, "hallway", "hall-moonrise");
+    assert.equal(submitDoorCode(state, "hall-exit", "2010").status, "need-clues");
+    state = inspect(state, "hallway", "hall-exit-note");
+    state = inspect(state, "hallway", "hall-keypad-cover", "keycard");
+    const exit = submitDoorCode(state, "hall-exit", "2010");
+    assert.equal(exit.status, "escaped");
+    assert.equal(exit.state.escaped, true);
 });
